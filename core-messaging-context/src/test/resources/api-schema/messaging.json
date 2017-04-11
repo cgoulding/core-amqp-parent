@@ -1,0 +1,14 @@
+{
+  "messages": [
+    {
+      "message": "test.message.request",
+      "exchange": "test.exchange.request",
+      "routingKey": "test.routing.base"
+    },
+    {
+      "message": "test.message.reply",
+      "exchange": "test.exchange.response",
+      "routingKey": "{replyTo}"
+    }
+  ]
+}
