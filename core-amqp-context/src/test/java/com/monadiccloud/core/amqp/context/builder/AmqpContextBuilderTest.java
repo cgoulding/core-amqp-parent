@@ -1,6 +1,7 @@
 package com.monadiccloud.core.amqp.context.builder;
 
 import com.monadiccloud.core.amqp.connectors.RabbitMqConnectionFactory;
+import com.monadiccloud.core.amqp.consumer.handler.AmqpContextAwareMessageHandler;
 import com.monadiccloud.core.amqp.context.AmqpContext;
 import com.monadiccloud.core.amqp.context.ApplicationConfiguration;
 import com.monadiccloud.core.amqp.context.ApplicationConfigurationFactory;
@@ -13,12 +14,12 @@ import org.springframework.amqp.core.Queue;
 import java.util.Arrays;
 import java.util.Collection;
 
-public class RabbitContextBuilderTest {
+public class AmqpContextBuilderTest {
     @Test
     public void testConsumeRequest() {
-        RabbitContextBuilder builder = new RabbitContextBuilder(new RabbitMqConnectionFactory(), appConfig("appXXX"),
+        AmqpContextBuilder builder = new AmqpContextBuilder(new RabbitMqConnectionFactory(), appConfig("appXXX"),
                 Arrays.asList(new MessageMetaData("test.message.request", "asdf", null, "routing.base")));
-        builder.consumes("queue1", false, new Object(), TestRequestMessage.class);
+        builder.consumes("queue1", false, new TestGenericMessageHandler(), TestRequestMessage.class);
         AmqpContext context = builder.build();
 
         Assert.assertNotNull(context.getAdmin());
@@ -40,7 +41,7 @@ public class RabbitContextBuilderTest {
 
     @Test
     public void testProduceRequest() {
-        RabbitContextBuilder builder = new RabbitContextBuilder(new RabbitMqConnectionFactory(), appConfig("appXXX"),
+        AmqpContextBuilder builder = new AmqpContextBuilder(new RabbitMqConnectionFactory(), appConfig("appXXX"),
                 Arrays.asList(new MessageMetaData("test.message.request", "asdf", null, "routing.base")));
         builder.produces(TestRequestMessage.class);
         AmqpContext context = builder.build();
@@ -61,9 +62,9 @@ public class RabbitContextBuilderTest {
 
     @Test
     public void testConsumeReply() {
-        RabbitContextBuilder builder = new RabbitContextBuilder(new RabbitMqConnectionFactory(), appConfig("appXXX"),
+        AmqpContextBuilder builder = new AmqpContextBuilder(new RabbitMqConnectionFactory(), appConfig("appXXX"),
                 Arrays.asList(new MessageMetaData("test.message.reply", "asdf", null, "routing.base")));
-        builder.consumes("queue1", false, new Object(), TestReplyMessage.class);
+        builder.consumes("queue1", false, new TestGenericMessageHandler(), TestReplyMessage.class);
         AmqpContext context = builder.build();
 
         Assert.assertNotNull(context.getAdmin());
@@ -86,7 +87,7 @@ public class RabbitContextBuilderTest {
 
     @Test
     public void testProduceReply() {
-        RabbitContextBuilder builder = new RabbitContextBuilder(new RabbitMqConnectionFactory(), appConfig("appXXX"),
+        AmqpContextBuilder builder = new AmqpContextBuilder(new RabbitMqConnectionFactory(), appConfig("appXXX"),
                 Arrays.asList(new MessageMetaData("test.message.reply", "asdf", null, "routing.base")));
         builder.produces(TestReplyMessage.class);
         AmqpContext context = builder.build();
@@ -107,11 +108,12 @@ public class RabbitContextBuilderTest {
 
     @Test
     public void testRequestAndReply() {
-        RabbitContextBuilder builder = new RabbitContextBuilder(new RabbitMqConnectionFactory(), appConfig("appXXX"),
+        AmqpContextBuilder builder = new AmqpContextBuilder(new RabbitMqConnectionFactory(), appConfig("appXXX"),
                 Arrays.asList(new MessageMetaData("test.message.request", "asdf", null, "routing.base"),
                         new MessageMetaData("test.message.reply", "asdf", null, "routing.base")));
 
-        builder.requestsAndReplies(TestRequestMessage.class, "requestReply", false, new Object(), TestReplyMessage.class);
+        builder.producesAndConsumes(TestRequestMessage.class, "requestReply", false, new TestGenericMessageHandler(),
+                TestReplyMessage.class);
         AmqpContext context = builder.build();
 
         Collection<Exchange> exchanges = context.getExchanges();
@@ -125,5 +127,18 @@ public class RabbitContextBuilderTest {
 
     private ApplicationConfiguration appConfig(String name) {
         return ApplicationConfigurationFactory.getInstance().createApplicationConfiguration(name);
+    }
+
+    private static class TestGenericMessageHandler implements AmqpContextAwareMessageHandler {
+
+        @Override
+        public void setAmqpContext(AmqpContext rabbitContext) {
+
+        }
+
+        @Override
+        public void handleMessage(Object message) throws Exception {
+
+        }
     }
 }

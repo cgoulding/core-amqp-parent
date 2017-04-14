@@ -13,9 +13,7 @@ public interface RabbitMqPropertiesConfig {
 
     String rabbitVirtualHost();
 
-    int rabbitRequestedHeartbeat();
-
-    String dataCenter();
+    Integer rabbitRequestedHeartbeat();
 
     String applicationName();
 

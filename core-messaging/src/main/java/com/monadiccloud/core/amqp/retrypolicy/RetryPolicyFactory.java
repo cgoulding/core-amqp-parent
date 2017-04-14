@@ -66,9 +66,7 @@ public class RetryPolicyFactory {
 
         // Default max attempts is 3. After the third attempt, the message is logged.
         policyMap.put(Exception.class, new SimpleRetryPolicy());
-
         policyMap.put(ListenerExecutionFailedException.class, new SimpleRetryPolicy());
-
         policyMap.put(MessageConversionException.class, new NeverRetryPolicy());
 
         exceptionClassifierRetryPolicy.setPolicyMap(policyMap);

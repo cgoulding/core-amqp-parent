@@ -11,7 +11,7 @@
         <module>core-contract</module>
         <module>core-contract-generation</module>
         <module>core-messaging</module>
-        <module>core-messaging-context</module>
+        <module>core-amqp-context</module>
         <module>core-amqp-bootstrap</module>
     </modules>
 

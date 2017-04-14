@@ -1,13 +1,17 @@
 package com.monadiccloud.core.amqp.template;
 
 import com.monadiccloud.core.amqp.context.AmqpContext;
-import com.monadiccloud.core.amqp.context.AmqpContextAware;
 import com.monadiccloud.core.amqp.context.MessageDescription;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
-public class OpinionatedRabbitTemplate implements AmqpContextAware {
+public class OpinionatedRabbitTemplate {
     private AmqpContext rabbitContext;
     private RabbitTemplate rabbitTemplate;
+
+    public OpinionatedRabbitTemplate(AmqpContext context) {
+        this.rabbitContext = context;
+        this.rabbitTemplate = context.getRabbitTemplate();
+    }
 
     public void send(Object message) {
         MessageDescription description = rabbitContext.getDescription(message.getClass());
@@ -17,11 +21,5 @@ public class OpinionatedRabbitTemplate implements AmqpContextAware {
     public void send(Object message, String routingKey) {
         MessageDescription description = rabbitContext.getDescription(message.getClass());
         rabbitTemplate.convertAndSend(description.getExchange(), routingKey, message);
-    }
-
-    @Override
-    public void setAmqpContext(AmqpContext rabbitContext) {
-        this.rabbitContext = rabbitContext;
-        this.rabbitTemplate = rabbitContext.getRabbitTemplate();
     }
 }

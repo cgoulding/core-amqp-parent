@@ -1,5 +1,7 @@
 package com.monadiccloud.core.amqp.context.builder;
 
+import com.monadiccloud.core.amqp.consumer.handler.AmqpContextAwareMessageHandler;
+import com.monadiccloud.core.amqp.consumer.handler.DelegatingMessageHandler;
 import com.monadiccloud.core.amqp.context.*;
 import com.monadiccloud.core.amqp.message.MessageConverterFactory;
 import com.monadiccloud.core.amqp.message.annotation.stereotypes.MessageStereotype;
@@ -20,7 +22,7 @@ import org.springframework.retry.support.RetryTemplate;
 import java.io.File;
 import java.util.*;
 
-public class RabbitContextBuilder {
+public class AmqpContextBuilder {
     final Map<String, Exchange> exchanges = new HashMap<>();
     final Map<String, Queue> queues = new HashMap<>();
     final Map<String, Binding> bindings = new HashMap<>();
@@ -37,16 +39,16 @@ public class RabbitContextBuilder {
     private ApplicationConfiguration applicationConfiguration;
     private String consumerPostfix;
 
-    public RabbitContextBuilder(ConnectionFactory rabbitConnectionFactory, ApplicationConfiguration configuration) {
+    public AmqpContextBuilder(ConnectionFactory rabbitConnectionFactory, ApplicationConfiguration configuration) {
         this(rabbitConnectionFactory, configuration, Collections.emptyList());
     }
 
-    public RabbitContextBuilder(ConnectionFactory rabbitConnectionFactory, ApplicationConfiguration configuration, File file) {
+    public AmqpContextBuilder(ConnectionFactory rabbitConnectionFactory, ApplicationConfiguration configuration, File file) {
         this(rabbitConnectionFactory, configuration, new MessageMetaDataReader().read(file));
     }
 
-    public RabbitContextBuilder(ConnectionFactory rabbitConnectionFactory, ApplicationConfiguration configuration,
-                                Collection<MessageMetaData> metaDatas) {
+    public AmqpContextBuilder(ConnectionFactory rabbitConnectionFactory, ApplicationConfiguration configuration,
+                              Collection<MessageMetaData> metaDatas) {
         this.rabbitConnectionFactory = rabbitConnectionFactory;
         this.applicationConfiguration = configuration;
         this.consumerPostfix = configuration.getApplicationName() + "." + configuration.getHostName();
@@ -55,12 +57,12 @@ public class RabbitContextBuilder {
         this.containerFactory = new ContainerFactory();
     }
 
-    public <P> RabbitContextBuilder produces(Class<P> produceClass) {
+    public <P> AmqpContextBuilder produces(Class<P> produceClass) {
         // Create durable exchanage by default
         return produces(produceClass, true);
     }
 
-    public <P> RabbitContextBuilder produces(Class<P> produceClass, boolean durable) {
+    public <P> AmqpContextBuilder produces(Class<P> produceClass, boolean durable) {
         MessageDescription<P> produceDescription = messageDescriptionFactory.createDescription(produceClass);
         descriptions.put(produceDescription.getType(), produceDescription);
         MessageExchangeBuilder builder = new MessageExchangeBuilder(this, produceDescription.getExchange(),
@@ -73,16 +75,18 @@ public class RabbitContextBuilder {
         return this;
     }
 
-    public <C> RabbitContextBuilder consumes(String queueName, boolean durable, Object listener, Class<C> messageClass) {
-        return consumes(queueName, durable, null, listener, messageClass);
+    public <C> AmqpContextBuilder consumes(String queueName, boolean durable, AmqpContextAwareMessageHandler handler,
+                                           Class<C> messageClass) {
+        return consumes(queueName, durable, null, handler, messageClass);
     }
 
-    public <C> RabbitContextBuilder consumes(String queueName, boolean durable, String containerAlias, Object listener, Class<C> messageClass) {
+    public <C> AmqpContextBuilder consumes(String queueName, boolean durable, String containerAlias,
+                                           AmqpContextAwareMessageHandler handler, Class<C> messageClass) {
         MessageDescription<C> description = messageDescriptionFactory.createDescription(messageClass);
         descriptions.put(description.getType(), description);
 
         //If the container alias happens to be null, then all queues will get the same 'null' container
-        addQueueData(containerAlias, queueName, listener);
+        addQueueData(containerAlias, queueName, messageClass, handler);
 
         MessageBindingBuilder bindingBuilder = new MessageBindingBuilder(this, resolveRoutingKey(description, consumerPostfix));
         bindingBuilder.fromExchange(description.getExchange(), description.getExchangeType()).toQueue(queueName, durable);
@@ -91,8 +95,9 @@ public class RabbitContextBuilder {
         return this;
     }
 
-    public <P> RabbitContextBuilder requestsAndReplies(Class<P> requestClass, String queueName, boolean durable, String containerAlias,
-                                                       Object listener, Class<?>... replyClasses) {
+    public <P> AmqpContextBuilder producesAndConsumes(Class<P> requestClass, String queueName, boolean durable,
+                                                      String containerAlias, AmqpContextAwareMessageHandler handler,
+                                                      Class<?>... replyClasses) {
         produces(requestClass);
 
         MessageDescription<P> requestDescription = messageDescriptionFactory.createDescription(requestClass);
@@ -102,7 +107,7 @@ public class RabbitContextBuilder {
             MessageDescription replyDescription = messageDescriptionFactory.createDescription(replyClass);
             descriptions.put(replyDescription.getType(), replyDescription);
 
-            addQueueData(containerAlias, queueName, listener);
+            addQueueData(containerAlias, queueName, replyClass, handler);
 
             MessageBindingBuilder replyBindingBuilder = new MessageBindingBuilder(this,
                     resolveRoutingKey(replyDescription.getStereotype(), requestDescription.getRoutingKey(), consumerPostfix));
@@ -116,12 +121,13 @@ public class RabbitContextBuilder {
         return this;
     }
 
-    public <P> RabbitContextBuilder requestsAndReplies(Class<P> requestClass, String queueName, boolean durable, Object listener,
-                                                       Class<?>... replyClasses) {
-        return requestsAndReplies(requestClass, queueName, durable, null, listener, replyClasses);
+    public <P> AmqpContextBuilder producesAndConsumes(Class<P> requestClass, String queueName, boolean durable,
+                                                      AmqpContextAwareMessageHandler handler,
+                                                      Class<?>... replyClasses) {
+        return producesAndConsumes(requestClass, queueName, durable, null, handler, replyClasses);
     }
 
-    public RabbitContextBuilder addContextAware(AmqpContextAware contextAware) {
+    public AmqpContextBuilder addContextAware(AmqpContextAware contextAware) {
         this.contextAwares.add(contextAware);
         return this;
     }
@@ -155,39 +161,38 @@ public class RabbitContextBuilder {
         return context;
     }
 
-    public RabbitContextBuilder add(Binding binding) {
+    public AmqpContextBuilder add(Binding binding) {
         bindings.put(Arrays.toString(new String[]{binding.getExchange(), binding.getExchange(), binding.getRoutingKey()}), binding);
         return this;
     }
 
-    public RabbitContextBuilder add(Exchange exchange) {
+    public AmqpContextBuilder add(Exchange exchange) {
         exchanges.put(exchange.getName(), exchange);
         return this;
     }
 
-    public RabbitContextBuilder add(Queue queue) {
+    public AmqpContextBuilder add(Queue queue) {
         queues.put(queue.getName(), queue);
         return this;
     }
 
-    public RabbitContextBuilder add(MessageListenerContainer container) {
+    public AmqpContextBuilder add(MessageListenerContainer container) {
         containers.add(container);
         return this;
     }
 
-    private void addQueueData(String containerAlias, String queueName, Object listener) {
+    private void addQueueData(String containerAlias, String queueName, Class messageClass,
+                              AmqpContextAwareMessageHandler handler) {
         //If the container alias happens to be null, then all queues will get the same 'null' container
         ContainerQueueData queueData = containerQueueDataMap.get(containerAlias);
         if (queueData == null) {
-            queueData = new ContainerQueueData(containerAlias, queueName, listener);
+            queueData = new ContainerQueueData(containerAlias, queueName);
+            contextAwares.add(queueData);
             containerQueueDataMap.put(containerAlias, queueData);
         } else {
-            // This logic should probably get expanded/hardened a bit more
-            if (queueData.getListener() != listener) {
-                throw new IllegalStateException("Handler references need to be the same for any given container alias");
-            }
             queueData.addQueueName(queueName);
         }
+        queueData.addHandler(messageClass, handler);
     }
 
     private RabbitTemplate createRabbitTemplate(MessageConverter messageConverter, RetryTemplate retryTemplate) {
@@ -234,15 +239,18 @@ public class RabbitContextBuilder {
         return builder.toString();
     }
 
-    private static class ContainerQueueData {
+    private static class ContainerQueueData implements AmqpContextAware {
         private String containerAlias;
         private Set<String> queueNames = new HashSet<>();
-        private Object listener;
+        private DelegatingMessageHandler handler = new DelegatingMessageHandler();
 
-        public ContainerQueueData(String containerAlias, String queueName, Object listener) {
+        public ContainerQueueData(String containerAlias, String queueName) {
             this.containerAlias = containerAlias;
             this.queueNames.add(queueName);
-            this.listener = listener;
+        }
+
+        public void addHandler(Class messageClass, AmqpContextAwareMessageHandler messageHandler) {
+            this.handler.addHandler(messageClass, messageHandler);
         }
 
         public boolean addQueueName(String s) {
@@ -257,16 +265,21 @@ public class RabbitContextBuilder {
             return queueNames;
         }
 
-        public Object getListener() {
-            return listener;
+        public DelegatingMessageHandler getListener() {
+            return handler;
+        }
+
+        @Override
+        public void setAmqpContext(AmqpContext rabbitContext) {
+            this.handler.setAmqpContext(rabbitContext);
         }
     }
 
     public static class MessageQueueBuilder {
-        private RabbitContextBuilder contextBuilder;
+        private AmqpContextBuilder contextBuilder;
         private QueueBuilder nativeBuilder;
 
-        public MessageQueueBuilder(RabbitContextBuilder contextBuilder, String name, boolean durable) {
+        public MessageQueueBuilder(AmqpContextBuilder contextBuilder, String name, boolean durable) {
             this.contextBuilder = contextBuilder;
             if (durable) {
                 nativeBuilder = QueueBuilder.durable(name);
@@ -295,7 +308,7 @@ public class RabbitContextBuilder {
             return this;
         }
 
-        public RabbitContextBuilder context() {
+        public AmqpContextBuilder context() {
             queue();
             return contextBuilder;
         }
@@ -308,10 +321,10 @@ public class RabbitContextBuilder {
     }
 
     public static class MessageExchangeBuilder {
-        private RabbitContextBuilder contextBuilder;
+        private AmqpContextBuilder contextBuilder;
         private ExchangeBuilder nativeBuilder;
 
-        private MessageExchangeBuilder(RabbitContextBuilder builder, String name, MessageExchangeType type) {
+        private MessageExchangeBuilder(AmqpContextBuilder builder, String name, MessageExchangeType type) {
             this.contextBuilder = builder;
             this.nativeBuilder = createBuilder(name, type);
         }
@@ -360,7 +373,7 @@ public class RabbitContextBuilder {
             return this;
         }
 
-        public RabbitContextBuilder context() {
+        public AmqpContextBuilder context() {
             exchange();
             return contextBuilder;
         }
@@ -373,12 +386,12 @@ public class RabbitContextBuilder {
     }
 
     public static class MessageBindingBuilder {
-        private RabbitContextBuilder contextBuilder;
+        private AmqpContextBuilder contextBuilder;
         private MessageExchangeBuilder exchangeBuilder;
         private MessageQueueBuilder queueBuilder;
         private String bindingBase;
 
-        public MessageBindingBuilder(RabbitContextBuilder builder, String bindingBase) {
+        public MessageBindingBuilder(AmqpContextBuilder builder, String bindingBase) {
             this.contextBuilder = builder;
             this.bindingBase = bindingBase;
         }
@@ -433,7 +446,7 @@ public class RabbitContextBuilder {
             return queueBuilder;
         }
 
-        public RabbitContextBuilder context() {
+        public AmqpContextBuilder context() {
             bind();
             return contextBuilder;
         }

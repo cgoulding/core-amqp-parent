@@ -29,7 +29,6 @@ public class DefaultRetryPolicyAdvice implements MethodInterceptor {
 
         StatefulRetryOperationsInterceptorFactoryBean factory = new StatefulRetryOperationsInterceptorFactoryBean();
         factory.setRetryOperations(retryTemplate);
-        factory.setMessageKeyGenerator(new DefaultMessageKeyGenerator());
         factory.setMessageRecoverer(messageRecoverer);
 
         this.delegate = factory.getObject();
