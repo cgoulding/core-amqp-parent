@@ -15,10 +15,8 @@ import static java.util.Arrays.asList;
 
 public class DefaultPropertiesRule extends PropertiesRule {
     protected List<ClassAction> actions = asList(
-            new AddInterface(asList("correlationId", "replyTo", "timestamp"), "com.monadiccloud.core.amqp.message.MessagePropertiesContainer"),
-            new AddInterface(asList("code", "message"), "com.monadiccloud.core.amqp.message.ErrorContainer"),
-            new AddGenericInterface("messageProperties", "com.monadiccloud.core.amqp.message.MessagePropertiesAware"),
-            new AddGenericInterface("errors", "com.monadiccloud.core.amqp.message.ErrorsAware").unwrapFieldType(List.class)
+//            new AddInterface(asList("xxx"), "com.monadiccloud.core.amqp.message.Xxx"),
+//            new AddGenericInterface("yyy", "com.monadiccloud.core.amqp.message.Yyy")
     );
 
     public DefaultPropertiesRule(RuleFactory ruleFactory) {
