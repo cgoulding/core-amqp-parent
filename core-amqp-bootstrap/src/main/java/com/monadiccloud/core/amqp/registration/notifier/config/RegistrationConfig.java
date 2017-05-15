@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.monadiccloud.core.amqp.MessageAnnotationProcessor;
-import com.monadiccloud.core.amqp.MessageAnnotationProcessorCallback;
 import com.monadiccloud.core.amqp.registration.notifier.message.MessageRegistrationNotified;
 import com.monadiccloud.core.amqp.registration.notifier.message.MessageRegistrationWithdrawn;
 import com.monadiccloud.core.amqp.registration.notifier.service.AmqpRegistrationNotifierService;
@@ -102,12 +101,8 @@ public class RegistrationConfig {
 
         MessageAnnotationProcessor messageAnnotationProcessor = new MessageAnnotationProcessor();
 
-        messageAnnotationProcessor.process(new MessageAnnotationProcessorCallback() {
-            @Override
-            public void found(String messageType, Class messageClass) {
-                classMappings.put(messageType, messageClass);
-            }
-
+        messageAnnotationProcessor.process((messageType, messageClass) -> {
+            classMappings.put(messageType, messageClass);
         }, messageClasses);
 
         classMapper.setIdClassMapping(classMappings);
