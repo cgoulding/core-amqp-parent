@@ -6,6 +6,8 @@ import com.monadiccloud.core.amqp.context.*;
 import com.monadiccloud.core.amqp.message.MessageConverterFactory;
 import com.monadiccloud.core.amqp.message.annotation.stereotypes.MessageStereotype;
 import com.monadiccloud.core.amqp.retrypolicy.RetryPolicyFactory;
+import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.Envelope;
 import org.springframework.amqp.core.*;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
@@ -13,6 +15,8 @@ import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.rabbit.listener.MessageListenerContainer;
 import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
+import org.springframework.amqp.rabbit.support.DefaultMessagePropertiesConverter;
+import org.springframework.amqp.rabbit.support.MessagePropertiesConverter;
 import org.springframework.amqp.support.converter.AbstractJsonMessageConverter;
 import org.springframework.amqp.support.converter.ClassMapper;
 import org.springframework.amqp.support.converter.DefaultClassMapper;
@@ -65,12 +69,16 @@ public class AmqpContextBuilder {
     public <P> AmqpContextBuilder produces(Class<P> produceClass, boolean durable) {
         MessageDescription<P> produceDescription = messageDescriptionFactory.createDescription(produceClass);
         descriptions.put(produceDescription.getType(), produceDescription);
-        MessageExchangeBuilder builder = new MessageExchangeBuilder(this, produceDescription.getExchange(),
+
+        MessageExchangeBuilder builder = new MessageExchangeBuilder(
+                this,
+                produceDescription.getExchange(),
                 produceDescription.getExchangeType());
 
         if (durable) {
             builder.durable();
         }
+
         builder.exchange();
         return this;
     }
@@ -137,6 +145,7 @@ public class AmqpContextBuilder {
 
         ClassMapper mapper = createClassMapper();
         AbstractJsonMessageConverter converter = createMessageConverter(mapper);
+        MessagePropertiesConverter messagePropertiesConverter = createDefaultMessagePropertiesConverter();
 
         RetryTemplate retryTemplate = createRetryTemplate();
         RabbitTemplate rabbitTemplate = createRabbitTemplate(converter, retryTemplate);
@@ -146,7 +155,10 @@ public class AmqpContextBuilder {
         containerQueueDataMap.forEach((containerAlias, containerData) ->
         {
             SimpleMessageListenerContainer container = containerFactory
-                    .createDefaultContainer(consumerPostfix + "-" + containerAlias, rabbitConnectionFactory, converter,
+                    .createDefaultContainer(consumerPostfix + "-" + containerAlias,
+                            rabbitConnectionFactory,
+                            converter,
+                            messagePropertiesConverter,
                             containerData.getListener());
             containerData.getQueueNames().forEach(q -> container.addQueues(queues.get(q)));
             containers.add(container);
@@ -162,7 +174,7 @@ public class AmqpContextBuilder {
     }
 
     public AmqpContextBuilder add(Binding binding) {
-        bindings.put(Arrays.toString(new String[]{binding.getExchange(), binding.getExchange(), binding.getRoutingKey()}), binding);
+        bindings.put(Arrays.toString(new String[]{binding.getDestination(), binding.getExchange(), binding.getRoutingKey()}), binding);
         return this;
     }
 
@@ -208,6 +220,24 @@ public class AmqpContextBuilder {
 
     private AbstractJsonMessageConverter createMessageConverter(ClassMapper mapper) {
         return (AbstractJsonMessageConverter) MessageConverterFactory.createDefaultConverter(mapper);
+    }
+
+    private MessagePropertiesConverter createDefaultMessagePropertiesConverter() {
+        return new DefaultMessagePropertiesConverter() {
+            @Override
+            public MessageProperties toMessageProperties(AMQP.BasicProperties source, Envelope envelope, String charset) {
+                MessageProperties messageProperties = super.toMessageProperties(source, envelope, charset);
+                enrichFromHeader(messageProperties);
+                return messageProperties;
+            }
+
+            private MessageProperties enrichFromHeader(MessageProperties messageProperties) {
+                if (messageProperties.getContentType() == null) {
+                    messageProperties.setContentType((String)messageProperties.getHeaders().get("Content-Type"));
+                }
+                return messageProperties;
+            }
+        };
     }
 
     private ClassMapper createClassMapper() {
