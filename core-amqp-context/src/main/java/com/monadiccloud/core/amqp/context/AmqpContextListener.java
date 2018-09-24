@@ -47,6 +47,8 @@ public class AmqpContextListener implements ApplicationListener<ApplicationConte
                 inject(configurableApplicationContext, rabbitContext.getMessageConverter());
                 inject(configurableApplicationContext, rabbitContext.getMessageConverter().getClassMapper());
             }
+
+            rabbitContext.start();
         }
     }
 
